@@ -1,0 +1,82 @@
+# Temporary folders
+.tmp
+tmp
+
+# Data files
+*.csv
+*.xlsx
+*.xls
+*.json
+*.parquet
+*.db
+*.sqlite
+*.sqlite3
+
+# Specific data directories
+Data/
+data/
+datasets/
+raw_data/
+processed_data/
+cache/
+tables/
+
+# Tests
+tests/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environments
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
