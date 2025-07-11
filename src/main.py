@@ -6,197 +6,92 @@ import sys
 
 import pandas as pd
 
-# Add the src directory to the Python path
+from etl.load import transform_to_star_schema
+from etl.transform import (clean_flights_csv_data, create_airport_dimension,
+                           create_date_dimension,
+                           create_normalized_tables_airports,
+                           create_normalized_tables_flights,
+                           create_time_dimension_from_flights,
+                           interpolate_all_weather_columns, remove_duplicates)
+from utils.output import print_tables, save_tables
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-def create_custom_table(data, columns, table_name="custom_table", add_id=True, id_column_name=None):
-    """
-    Create a custom table with specified columns
+def analyze_null_values(df, dataset_name="Dataset"):
+    """Analyze null values in the dataset for cleaning insights"""
+    print(f"\n{'='*60}")
+    print(f"NULL VALUE ANALYSIS - {dataset_name}")
+    print(f"{'='*60}")
     
-    Args:
-        data (pd.DataFrame): Source data
-        columns (list): List of column names to include
-        table_name (str): Name for the table (used for ID column naming)
-        add_id (bool): Whether to add an ID column
-        id_column_name (str): Custom name for ID column, if None uses f"{table_name}_id"
+    total_rows = len(df)
+    print(f"Total rows: {total_rows:,}")
     
-    Returns:
-        pd.DataFrame: Table with specified columns
-    """
-    # Filter columns that exist in the data
-    available_columns = [col for col in columns if col in data.columns]
-    missing_columns = [col for col in columns if col not in data.columns]
+    # Overall null statistics
+    null_stats = []
+    for col in df.columns:
+        null_count = df[col].isnull().sum()
+        null_percentage = (null_count / total_rows) * 100
+        data_type = str(df[col].dtype)
+        unique_values = df[col].nunique()
+        
+        null_stats.append({
+            'Column': col,
+            'Null_Count': null_count,
+            'Null_Percentage': round(null_percentage, 2),
+            'Data_Type': data_type,
+            'Unique_Values': unique_values,
+            'Non_Null_Count': total_rows - null_count
+        })
     
-    if missing_columns:
-        print(f"Warning: Missing columns for {table_name}: {missing_columns}")
+    # Convert to DataFrame for better display
+    null_df = pd.DataFrame(null_stats)
+    null_df = null_df.sort_values('Null_Percentage', ascending=False)
     
-    if not available_columns:
-        print(f"Error: No available columns for {table_name}")
-        return pd.DataFrame()
+    print("\nNULL VALUE SUMMARY BY COLUMN:")
+    print(null_df.to_string(index=False))
     
-    # Create table with available columns
-    table = data[available_columns].drop_duplicates().reset_index(drop=True)
+    # Categorize columns by null percentage
+    critical_nulls = null_df[null_df['Null_Percentage'] > 50]
+    high_nulls = null_df[(null_df['Null_Percentage'] > 20) & (null_df['Null_Percentage'] <= 50)]
+    moderate_nulls = null_df[(null_df['Null_Percentage'] > 5) & (null_df['Null_Percentage'] <= 20)]
+    low_nulls = null_df[null_df['Null_Percentage'] <= 5]
     
-    # Add ID column if requested
-    if add_id:
-        id_name = id_column_name if id_column_name else f"{table_name}_id"
-        table[id_name] = range(1, len(table) + 1)
-        # Move ID column to the front
-        cols = [id_name] + [col for col in table.columns if col != id_name]
-        table = table[cols]
+    print(f"\nCATEGORIZATION BY NULL SEVERITY:")
+    print(f"🔴 CRITICAL (>50% null): {len(critical_nulls)} columns")
+    if len(critical_nulls) > 0:
+        print(f"   {list(critical_nulls['Column'])}")
     
-    print(f"Created {table_name} table with {len(table)} rows and columns: {list(table.columns)}")
-    return table
+    print(f"🟠 HIGH (20-50% null): {len(high_nulls)} columns")
+    if len(high_nulls) > 0:
+        print(f"   {list(high_nulls['Column'])}")
+    
+    print(f"🟡 MODERATE (5-20% null): {len(moderate_nulls)} columns")
+    if len(moderate_nulls) > 0:
+        print(f"   {list(moderate_nulls['Column'])}")
+    
+    print(f"🟢 LOW (<5% null): {len(low_nulls)} columns")
+    if len(low_nulls) > 0:
+        print(f"   {list(low_nulls['Column'])}")
+    
 
-def create_normalized_tables_flights(flights_data):
     
-    tables = {}
+    # Find rows with all nulls
+    all_null_rows = df.isnull().all(axis=1).sum()
+    print(f"Rows with ALL null values: {all_null_rows:,}")
     
-    # 1. Aircraft Table
-    tables['aircraft'] = create_custom_table(
-        flights_data, 
-        ['TAIL_NUM', 'MANUFACTURER', 'ICAO TYPE', 'YEAR OF MANUFACTURE', 'OP_CARRIER'],
-        'aircraft',
-        add_id=False  # TAIL_NUM is already the primary key
-    )
+    # Find rows with no nulls
+    no_null_rows = df.notnull().all(axis=1).sum()
+    print(f"Rows with NO null values: {no_null_rows:,} ({(no_null_rows/total_rows)*100:.1f}%)")
     
-    # 2. Aircraft Carriers Table
-    tables['carriers'] = create_custom_table(
-        flights_data,
-        ['OP_CARRIER', 'CARRIER_NAME'],
-        'carriers',
-        add_id=False  # OP_CARRIER is already the primary key
-    )
+    # Most common null combinations
+    null_pattern_counts = df.isnull().value_counts().head(5)
+    print(f"\nTop 5 NULL patterns:")
+    for pattern, count in null_pattern_counts.items():
+        pct = (count / total_rows) * 100
+        print(f"  Pattern: {dict(zip(df.columns, pattern))} - {count:,} rows ({pct:.1f}%)")
     
-    # 3. Airports Table (from ORIGIN and DEST)
-    airports_data = []
-    if 'ORIGIN' in flights_data.columns:
-        airports_data.extend(flights_data['ORIGIN'].unique())
-    if 'DEST' in flights_data.columns:
-        airports_data.extend(flights_data['DEST'].unique())
-    
-    if airports_data:
-        airports_df = pd.DataFrame({
-            'airport_code': list(set(airports_data))
-        }).dropna().reset_index(drop=True)
-        tables['airports'] = create_custom_table(
-            airports_df,
-            ['airport_code'],
-            'airports',
-            add_id=True,
-            id_column_name='airport_id'
-        )
-    else:
-        tables['airports'] = pd.DataFrame()
-    
-    # 4. Routes Table
-    tables['routes'] = create_custom_table(
-        flights_data,
-        ['ORIGIN', 'DEST'],
-        'routes',
-        add_id=True,
-        id_column_name='route_id'
-    )
-    
-    # 5. Weather Conditions Table
-    tables['weather'] = create_custom_table(
-        flights_data,
-        ['WIND_SPEED', 'TEMPERATURE', 'ACTIVE_WEATHER', 'VISIBILITY'],
-        'weather',
-        add_id=True,
-        id_column_name='weather_id'
-    )
-    
-    # 6. Flights Table (Fact Table) with Foreign Keys
-    # First create the base flights table
-    flights_base = create_custom_table(
-        flights_data,
-        ['FL_DATE', 'DEP_HOUR', 'SCHED_DEP_TIME', 'DEP_DELAY', 'CANCELLED', 'TAIL_NUM', 'ORIGIN', 'DEST', 
-         'WIND_SPEED', 'TEMPERATURE', 'ACTIVE_WEATHER', 'VISIBILITY'],
-        'flights_temp',
-        add_id=True,
-        id_column_name='flight_id'
-    )
-    
-    # Add route_id foreign key
-    if not tables['routes'].empty and not flights_base.empty:
-        flights_with_route = flights_base.merge(
-            tables['routes'][['route_id', 'ORIGIN', 'DEST']], 
-            on=['ORIGIN', 'DEST'], 
-            how='left'
-        )
-    else:
-        flights_with_route = flights_base.copy()
-        flights_with_route['route_id'] = None
-    
-    # Add weather_id foreign key
-    if not tables['weather'].empty and not flights_with_route.empty:
-        flights_with_weather = flights_with_route.merge(
-            tables['weather'][['weather_id', 'WIND_SPEED', 'TEMPERATURE', 'ACTIVE_WEATHER', 'VISIBILITY']], 
-            on=['WIND_SPEED', 'TEMPERATURE', 'ACTIVE_WEATHER', 'VISIBILITY'], 
-            how='left'
-        )
-    else:
-        flights_with_weather = flights_with_route.copy()
-        flights_with_weather['weather_id'] = None
-    
-    # Create final flights table with only necessary columns (removing original ORIGIN, DEST, weather columns)
-    final_flights_columns = [
-        'flight_id', 'FL_DATE', 'DEP_HOUR', 'SCHED_DEP_TIME', 'DEP_DELAY', 
-        'CANCELLED', 'TAIL_NUM', 'route_id', 'weather_id'
-    ]
-    
-    # Filter to only include columns that exist
-    available_flights_columns = [col for col in final_flights_columns if col in flights_with_weather.columns]
-    tables['flights'] = flights_with_weather[available_flights_columns].copy()
-    
-    print(f"Created flights table with {len(tables['flights'])} rows and columns: {list(tables['flights'].columns)}")
-    
-    return tables   
+    return null_df
 
-def create_normalized_tables_airports(airports_data):
-    """
-    Create normalized tables for airports data
-    
-    Args:
-        airports_data (pd.DataFrame): DataFrame containing airport information
-    
-    Returns:
-        dict: Dictionary of normalized tables
-    """
-    tables = {}
-    
-    # 1. Airports Table
-    tables['airports'] = create_custom_table(
-        airports_data,
-        ['iata_code', 'city', 'state'],
-        'airports',
-        add_id=False  # iata_code is already the primary key
-    )
-    
-    return tables
-
-def print_tables(tables):
-    """Print all normalized tables"""
-    for table_name, table_data in tables.items():
-        if not table_data.empty:
-            print(f"\n{'='*50}")
-            print(f"{table_name.upper()} TABLE ({len(table_data)} rows)")
-            print(f"{'='*50}")
-            print(table_data.head(10).to_string(index=False))
-            print(f"Columns: {list(table_data.columns)}")
-        else:
-            print(f"\n{table_name.upper()} TABLE: No data available")
-
-def save_tables(tables, output_dir="./Data/tables"):
-    """Save normalized tables to CSV files"""
-    os.makedirs(output_dir, exist_ok=True)
-    
-    for table_name, table_data in tables.items():
-        if not table_data.empty:
-            output_path = os.path.join(output_dir, f"{table_name}_table.csv")
-            table_data.to_csv(output_path, index=False)
-            print(f"Saved {table_name} table to: {output_path}")
 
 def main():
     """Main ETL pipeline execution"""
@@ -205,53 +100,72 @@ def main():
     # Define data paths
     flights_csv = "./Data/CompleteData.csv"
     filtered_csv = "./Data/filtered_flights_2022_01_01_hour_0.csv"
-    airports_csv = "./Data/us-airports.csv"
+    #us-airports is a more extensive list but stations includes all airports in the flights data
+    # If you want to use us-airports, change airports_csv to "./Data/us-airports.csv" and rename the columns accordingly
+    airports_csv = "./Data/Stations.csv"
+    carriers_csv = "./Data/Carriers.csv"
+ 
     
     # Check if filtered CSV already exists
-    from etl.extract import extract_data
     if os.path.exists(filtered_csv):
         print(f"Using existing filtered data from: {filtered_csv}")
         filtered_flights_csv = pd.read_csv(filtered_csv)
         print(f"Successfully loaded {len(filtered_flights_csv)} filtered flights")
     else:
-        print("Processing full dataset...")
         
         # Extract data
-        raw_data = extract_data(flights_csv)
+        raw_data = pd.read_csv(flights_csv)
+        print(raw_data.columns)
         # Define required columns
         required_columns_flights = [
-            'FL_DATE', 'DEP_HOUR', 'SCHED_DEP_TIME', 'DEP_DELAY', 'CANCELLED',
+            'FL_DATE', 'DEP_HOUR', 'CRS_DEP_TIME', 'DEP_DELAY', 'CANCELLED',
             'TAIL_NUM', 'MANUFACTURER', 'ICAO TYPE', 'YEAR OF MANUFACTURE', 
-            'OP_CARRIER', 'CARRIER_NAME', 'ORIGIN', 'DEST',
-            'WIND_SPEED', 'TEMPERATURE', 'ACTIVE_WEATHER', 'VISIBILITY'
+            'OP_UNIQUE_CARRIER', 'ORIGIN', 'DEST',
+            'WIND_SPD', 'TEMPERATURE', 'ACTIVE_WEATHER', 'VISIBILITY'
         ]
         
         # Filter columns that exist
         available_columns = [col for col in required_columns_flights if col in raw_data.columns]
         filtered_flights_csv = raw_data[available_columns].copy()
 
+
         # Save for future use
         os.makedirs("./Data", exist_ok=True)
         filtered_flights_csv.to_csv(filtered_csv, index=False)
 
-    raw_airports_data = extract_data(airports_csv)
+    raw_airports_data =  pd.read_csv(airports_csv)
+    carriers_data =  pd.read_csv(carriers_csv)
     required_columns_airports = [
-        'iata_code', 'city', 'state'
+        'AIRPORT', 'DISPLAY_AIRPORT_CITY_NAME_FULL', 'AIRPORT_STATE_NAME'
     ]
+
     available_columns = [col for col in required_columns_airports if col in raw_airports_data.columns]
     filtered_airports_csv = raw_airports_data[available_columns].copy()
-    # Create normalized tables
-    print("\nCreating normalized tables...")
-    tables = create_normalized_tables_flights(filtered_flights_csv)
+    filtered_airports_csv = filtered_airports_csv.rename(columns={
+        'AIRPORT': 'iata_code',
+        'DISPLAY_AIRPORT_CITY_NAME_FULL': 'city',
+        'AIRPORT_STATE_NAME': 'state'
+    })
+    
+    # Only keep airports that exist in flights data
+    flight_airports = set(filtered_flights_csv['ORIGIN'].unique()) | set(filtered_flights_csv['DEST'].unique())
+    filtered_airports_csv = filtered_airports_csv[filtered_airports_csv['iata_code'].isin(flight_airports)]
+    # Clean city names
+    filtered_airports_csv['city'] = filtered_airports_csv['city'].str.replace(r',\s*[A-Z]{2}$', '', regex=True)
+
+    print(f"Filtered airports to {len(filtered_airports_csv)} airports that appear in flights data")
+    
+    analyze_null_values(filtered_flights_csv, "Flights Data")
+
+    filtered_flights_csv = remove_duplicates(filtered_flights_csv, subset=['FL_DATE','TAIL_NUM', 'CRS_DEP_TIME'])
+    filtered_flights_csv = interpolate_all_weather_columns(filtered_flights_csv)
+    filtered_flights_csv = clean_flights_csv_data(filtered_flights_csv)
+
+    tables = create_normalized_tables_flights(filtered_flights_csv, carriers_data)
     tablesAirport = create_normalized_tables_airports(filtered_airports_csv)
 
-    # Print all tables
-    print_tables(tables)
-    
-    # Save tables to CSV files
-    save_tables(tables)
-    
-    print(f"\nProcess completed! Created {len([t for t in tables.values() if not t.empty])} tables")
+    finalSchema = transform_to_star_schema(filtered_flights_csv, filtered_airports_csv, carriers_data)
+    save_tables(finalSchema, suffix="_star")
 
 if __name__ == "__main__":
     main()
