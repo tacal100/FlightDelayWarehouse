@@ -13,8 +13,6 @@ tmp
 *.sqlite3
 
 # Specific data directories
-Data/
-data/
 datasets/
 raw_data/
 processed_data/
