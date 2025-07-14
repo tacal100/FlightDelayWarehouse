@@ -68,7 +68,7 @@ def clean_flights_csv_data(df):
     initial_count = len(df)
     
     # Remove invalid delays
-    df = df[(df['DEP_DELAY'] >= -60) & (df['DEP_DELAY'] <= 180)]
+    df = df[(df['DEP_DELAY'] >= -60)]
     new_count = len(df)
     print(f"Flights CSV: Removed {initial_count - len(df)} invalid rows after delay cleaning")
     # Remove cancelled flights with no valid DEP_HOUR
@@ -76,7 +76,7 @@ def clean_flights_csv_data(df):
     print(f"Flights CSV: Removed {new_count - len(df)} invalid rows after cancellation cleaning")
     new_count = len(df)
     # Remove invalid temperature values (e.g. unrealistic temperatures -> temps are in celsius also see for hottest day in 2022 (53 Celsius) https://en.wikipedia.org/wiki/2022_North_American_heat_waves#:~:text=On%20September%201%2C%20Death%20Valley,of%20North%20America%20at%20large.)
-    df = df[(df['TEMPERATURE'] <= 60) & (df['TEMPERATURE'] >= -20)]
+    df = df[(df['TEMPERATURE'] <= 60) & (df['TEMPERATURE'] >= -40)]
     print(f"Flights CSV: Removed {new_count - len(df)} invalid rows after temperature cleaning")
     new_count = len(df)
     # Remove invalid wind speed values (e.g. unrealistic wind speeds -> see Wind_Speed_Outliers in Data/Charts also see https://www.skyscanner.com/tips-and-inspiration/what-windspeed-delays-flights#:~:text=With%20this%20in%20mind%2C%20horizontal,affect%20take%2Doff%20and%20landing.)
