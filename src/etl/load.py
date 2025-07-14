@@ -77,7 +77,7 @@ def create_star_schema_dimensions(filtered_flights_csv, filtered_airports_csv, c
     dim_aircraft = filtered_flights_csv[aircraft_cols].drop_duplicates(subset=['TAIL_NUM']).reset_index(drop=True)
     dimensions['dim_aircraft'] = dim_aircraft
     
-    # 4. AircraftCarriers Dimension (separate table as shown in schema)
+    # 4. AircraftCarriers Dimension
     carriers_dim = filtered_flights_csv[['OP_UNIQUE_CARRIER']].drop_duplicates().reset_index(drop=True)
     if carriers_data is not None and not carriers_data.empty:
         carriers_dim = carriers_dim.merge(
@@ -95,7 +95,6 @@ def create_star_schema_dimensions(filtered_flights_csv, filtered_airports_csv, c
     # 5. Airports Dimension (airport_id is PK, iata_code is attribute)
     dim_airports = filtered_airports_csv.copy()
     dim_airports['airport_id'] = range(1, len(dim_airports) + 1)
-    # Keep iata_code as attribute, not as PK
     dim_airports = dim_airports[['airport_id', 'iata_code', 'city', 'state']]
     dimensions['dim_airports'] = dim_airports
         
