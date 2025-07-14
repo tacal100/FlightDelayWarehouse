@@ -21,9 +21,6 @@ def extract_flights_data(flights_csv, filtered_csv, required_columns_flights):
     return filtered_flights_csv
 
 def extract_airports_data(airports_csv, required_columns_airports):
-    """
-    Extracts and filters airport data from the raw CSV.
-    """
     raw_airports_data = pd.read_csv(airports_csv)
     available_columns = [col for col in required_columns_airports if col in raw_airports_data.columns]
     filtered_airports_csv = raw_airports_data[available_columns].copy()
@@ -35,7 +32,4 @@ def extract_airports_data(airports_csv, required_columns_airports):
     return filtered_airports_csv
 
 def extract_carriers_data(carriers_csv):
-    """
-    Extracts carrier data from the raw CSV.
-    """
     return pd.read_csv(carriers_csv)

@@ -181,11 +181,11 @@ def create_fact_table(filtered_flights_csv, dimensions):
     fact_flights = fact_flights.rename(columns={
         'DEP_HOUR': 'scheduled_dep_time',
         'DEP_DELAY': 'departure_delay',
-        'CANCELLED': 'cancellation_code',  # FK matches dim_cancellation.cancellation_code
-        'TAIL_NUM': 'TAIL_NUM'  # FK matches dim_aircraft.TAIL_NUM (keep same name)
+        'CANCELLED': 'cancellation_code',  
+        'TAIL_NUM': 'TAIL_NUM' 
     })
     
-    # Add is_cancelled measure (binary: 0 or 1)
+    # Add is_cancelled binary measure
     fact_flights['is_cancelled'] = (fact_flights['cancellation_code'] > 0).astype(int)
     
     # 5. Drop unnecessary columns
@@ -194,7 +194,7 @@ def create_fact_table(filtered_flights_csv, dimensions):
     if 'CRS_DEP_TIME' in fact_flights.columns:
         fact_flights = fact_flights.drop('CRS_DEP_TIME', axis=1)
     
-    # Drop aircraft-related columns (they're in aircraft dimension)
+    # Drop aircraft-related columns
     aircraft_cols_to_drop = ['MANUFACTURER', 'ICAO TYPE', 'YEAR OF MANUFACTURE', 'OP_UNIQUE_CARRIER']
     for col in aircraft_cols_to_drop:
         if col in fact_flights.columns:
@@ -202,16 +202,16 @@ def create_fact_table(filtered_flights_csv, dimensions):
     
     # Select final columns in proper order
     fact_columns = [
-        'flight_id',              # PK
-        'date',                   # FK matches dim_date.date
-        'scheduled_dep_time',     # Measure
-        'departure_delay',        # Measure
-        'is_cancelled',           # Measure (0 or 1)
-        'cancellation_code',      # FK matches dim_cancellation.cancellation_code
-        'TAIL_NUM',               # FK matches dim_aircraft.TAIL_NUM
-        'origin_airport_oid',     # FK to dim_airports.airport_id (origin)
-        'dest_airport_oid',       # FK to dim_airports.airport_id (destination)
-        'weather_id'              # FK matches dim_weather.weather_id
+        'flight_id',
+        'date',
+        'scheduled_dep_time',
+        'departure_delay',
+        'is_cancelled',
+        'cancellation_code',
+        'TAIL_NUM',
+        'origin_airport_oid',
+        'dest_airport_oid',
+        'weather_id'
     ]
     
     fact_flights = fact_flights[fact_columns]
@@ -225,30 +225,24 @@ def transform_to_star_schema(filtered_flights_csv, filtered_airports_csv, carrie
     """
     print("\nCreating Star Schema...")
     
-    # Create dimensions
     dimensions = create_star_schema_dimensions(
         filtered_flights_csv, 
         filtered_airports_csv, 
         carriers_data
     )
     
-    # Create fact table
     fact_flights = create_fact_table(filtered_flights_csv, dimensions)
-    
-    # Add fact table to results
     star_schema = {
         'fact_flights': fact_flights,
         **dimensions
     }
     
-    # Print summary
     print("\nStar Schema Created:")
     for table_name, df in star_schema.items():
         print(f"  {table_name}: {len(df)} rows, {len(df.columns)} columns")
         if len(df) > 0:
             print(f"    Columns: {list(df.columns)}")
         
-    # Verify foreign key relationships
     print("\nForeign Key Verification:")
     print(f"  Origin airports: {fact_flights['origin_airport_oid'].nunique()} unique airports")
     print(f"  Destination airports: {fact_flights['dest_airport_oid'].nunique()} unique airports")

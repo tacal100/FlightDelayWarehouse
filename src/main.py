@@ -73,18 +73,6 @@ def main():
     airports_csv = "./Data/Stations.csv"
     carriers_csv = "./Data/Carriers.csv"
  
-    
-    # Check if filtered CSV already exists
-    # if os.path.exists(filtered_csv):
-    #     print(f"Using existing filtered data from: {filtered_csv}")
-    #     filtered_flights_csv = pd.read_csv(filtered_csv)
-    #     print(f"Successfully loaded {len(filtered_flights_csv)} filtered flights")
-    # else:
-        
-    #     # Extract data
-    #     raw_data = pd.read_csv(flights_csv)
-    #     print(raw_data.columns)
-    #     # Define required columns
     required_columns_flights = [
         'FL_DATE', 'DEP_HOUR', 'CRS_DEP_TIME', 'DEP_DELAY', 'CANCELLED',
         'TAIL_NUM', 'MANUFACTURER', 'ICAO TYPE', 'YEAR OF MANUFACTURE', 
