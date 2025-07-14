@@ -1,4 +1,8 @@
+import sqlite3
+
 import pandas as pd
+import psycopg2
+from sqlalchemy import create_engine
 
 
 def create_date_dimension(flights_df):
@@ -219,35 +223,54 @@ def create_fact_table(filtered_flights_csv, dimensions):
     return fact_flights
 
 
-def transform_to_star_schema(filtered_flights_csv, filtered_airports_csv, carriers_data):
+def transform_to_star_schema(filtered_flights_csv, filtered_airports_csv, carriers_data, db_path="flight_warehouse.db"):
     """
-    Main function to transform normalized data to star schema
+    Main function to transform normalized data to star schema and save to SQLite DB
     """
     print("\nCreating Star Schema...")
-    
+
     dimensions = create_star_schema_dimensions(
         filtered_flights_csv, 
         filtered_airports_csv, 
         carriers_data
     )
-    
     fact_flights = create_fact_table(filtered_flights_csv, dimensions)
     star_schema = {
         'fact_flights': fact_flights,
         **dimensions
     }
-    
-    print("\nStar Schema Created:")
-    for table_name, df in star_schema.items():
-        print(f"  {table_name}: {len(df)} rows, {len(df.columns)} columns")
-        if len(df) > 0:
-            print(f"    Columns: {list(df.columns)}")
-        
+
+    save_to_postgresql(
+    star_schema,
+    user='talhacaliskan',
+    password='',
+    host='localhost',
+    port=5432,
+    dbname='flight_warehouse')
+
+    print(f"\nStar schema tables saved to {db_path}")
+
     print("\nForeign Key Verification:")
     print(f"  Origin airports: {fact_flights['origin_airport_oid'].nunique()} unique airports")
     print(f"  Destination airports: {fact_flights['dest_airport_oid'].nunique()} unique airports")
     print(f"  Weather references {fact_flights['weather_id'].nunique()} unique weather conditions")
     print(f"  Aircraft (TAIL_NUM) references {fact_flights['TAIL_NUM'].nunique()} unique aircraft")
     print(f"  Cancellation codes: {fact_flights['cancellation_code'].value_counts().to_dict()}")
-    
+
     return star_schema
+
+
+def save_to_postgresql(star_schema, user, password, host, port, dbname):
+    """
+    Save star schema tables to a PostgreSQL database.
+    """
+    conn_str = f'postgresql+psycopg2://{user}:{password}@{host}:{port}/{dbname}'
+    engine = create_engine(conn_str)
+
+    for table_name, df in star_schema.items():
+        df.to_sql(table_name + "_star", engine, if_exists='replace', index=False)
+        print(f"Saved {table_name} to PostgreSQL ({len(df)} rows, {len(df.columns)} columns)")
+        if len(df) > 0:
+            print(f"    Columns: {list(df.columns)}")
+    engine.dispose()
+    print(f"\nStar schema tables saved to PostgreSQL database '{dbname}' at {host}:{port}")
