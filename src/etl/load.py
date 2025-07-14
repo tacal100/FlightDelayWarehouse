@@ -69,10 +69,10 @@ def create_star_schema_dimensions(filtered_flights_csv, filtered_airports_csv, c
     # 1. Date Dimension 
     dimensions['dim_date'] = create_date_dimension(filtered_flights_csv)
     
-    # 2. Weather Dimension (NO ACTIVE_WEATHER!)
+    # 2. Weather Dimension
     dimensions['dim_weather'] = create_weather_dimension(filtered_flights_csv)
     
-    # 3. Aircraft Dimension (with tail_number as PK)
+    # 3. Aircraft Dimension
     aircraft_cols = ['TAIL_NUM', 'MANUFACTURER', 'ICAO TYPE', 'YEAR OF MANUFACTURE', 'OP_UNIQUE_CARRIER']
     dim_aircraft = filtered_flights_csv[aircraft_cols].drop_duplicates(subset=['TAIL_NUM']).reset_index(drop=True)
     dimensions['dim_aircraft'] = dim_aircraft
@@ -92,7 +92,7 @@ def create_star_schema_dimensions(filtered_flights_csv, filtered_airports_csv, c
         carriers_dim['carrier_name'] = 'Unknown'
     dimensions['dim_aircraft_carriers'] = carriers_dim
     
-    # 5. Airports Dimension (airport_id is PK, iata_code is attribute)
+    # 5. Airports Dimension
     dim_airports = filtered_airports_csv.copy()
     dim_airports['airport_id'] = range(1, len(dim_airports) + 1)
     dim_airports = dim_airports[['airport_id', 'iata_code', 'city', 'state']]
@@ -128,7 +128,7 @@ def create_fact_table(filtered_flights_csv, dimensions):
     # Generate flight_id as PK
     fact_flights['flight_id'] = range(1, len(fact_flights) + 1)
     
-    # 1. Keep flight_date (from FL_DATE) - but rename to match dim_date.date
+    # 1. Keep flight_date
     fact_flights['date'] = pd.to_datetime(fact_flights['FL_DATE'])
     
     # 2. Transform ACTIVE_WEATHER to description for joining
@@ -147,11 +147,10 @@ def create_fact_table(filtered_flights_csv, dimensions):
         how='left'
     )
     
-    # Drop all weather columns including ACTIVE_WEATHER
     fact_flights = fact_flights.drop(weather_cols + ['ACTIVE_WEATHER'], axis=1)
     
     # 3. Add origin and destination airport FKs directly
-    # Join for origin airport
+    # Join origin airport
     fact_flights = fact_flights.merge(
         dimensions['dim_airports'][['iata_code', 'airport_id']], 
         left_on='ORIGIN', 
@@ -161,7 +160,7 @@ def create_fact_table(filtered_flights_csv, dimensions):
     fact_flights = fact_flights.rename(columns={'airport_id': 'origin_airport_oid'})
     fact_flights = fact_flights.drop('iata_code', axis=1)
     
-    # Join for destination airport
+    # Join destination airport
     fact_flights = fact_flights.merge(
         dimensions['dim_airports'][['iata_code', 'airport_id']], 
         left_on='DEST', 
