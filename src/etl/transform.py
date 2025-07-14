@@ -82,4 +82,9 @@ def clean_flights_csv_data(df):
     # Remove invalid wind speed values (e.g. unrealistic wind speeds -> see Wind_Speed_Outliers in Data/Charts also see https://www.skyscanner.com/tips-and-inspiration/what-windspeed-delays-flights#:~:text=With%20this%20in%20mind%2C%20horizontal,affect%20take%2Doff%20and%20landing.)
     df = df[(df['WIND_SPD'] <= 35) & (df['WIND_SPD'] >= 0)]
     print(f"Flights CSV: Removed {new_count - len(df)} invalid rows after wind speed cleaning")
+    new_count = len(df)
+    # Remove entries where aircraft manufacturer is unknown or missing
+    df = df[(df['MANUFACTURER'].notna()) & (df['MANUFACTURER'].str.lower() != 'unknown')]
+    print(f"Flights CSV: Removed {new_count - len(df)} invalid rows after manufacturer cleaning")
+
     return df

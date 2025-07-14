@@ -114,7 +114,7 @@ def main():
 
     # Remove duplicate entries (check by flight time, tail number for plane and departure time (there cant be multiple entries like this for a single plane))
     filtered_flights_csv = remove_duplicates(filtered_flights_csv, subset=['FL_DATE','TAIL_NUM', 'CRS_DEP_TIME'])
-    print(filtered_flights_csv[filtered_flights_csv["DEP_DELAY"] > 180])
+    print(len(filtered_flights_csv[filtered_flights_csv["DEP_DELAY"] > 180]))
     #Find the nearest neighbor for ACTIVE_WEATHER in a time window and interpolate based on time for numerical weather columns (drop remaining NaNs (Approx. 3000 rows))
     filtered_flights_csv = interpolate_all_weather_columns(filtered_flights_csv)
 
@@ -123,6 +123,8 @@ def main():
     #    and  more than 23 hours after scheduled flight as these are edge cases in commercial flights
     # 2. Remove cancelled flights with no valid DEP_HOUR (DEP_HOUR != 0)
     # 3. Remove invalid temperature values (e.g. unrealistic temperatures, see figure Wind_Speed_Outliers in Data/Charts)
+    # 4. Remove invalid wind speed values (e.g. unrealistic wind speeds -> see Wind_Speed_Outliers in Data/Charts also see https://www.skyscanner.com/tips-and-inspiration/what-windspeed-delays-flights#:~:text=With%20this%20in%20mind%2C%20horizontal,affect%20take%2Doff%20and%20landing.)
+    # 5. Remove rows where aircraft manufacturer is unknown or missing
     filtered_flights_csv = clean_flights_csv_data(filtered_flights_csv)
 
     finalSchema = transform_to_star_schema(filtered_flights_csv, filtered_airports_csv, carriers_data)
